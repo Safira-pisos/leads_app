@@ -2,8 +2,7 @@ services:
   - type: web
     name: leads-app
     env: python
-    pythonVersion: 3.11
+    plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app
-    autoDeploy: true
-    plan: free
+    pythonVersion: 3.13
