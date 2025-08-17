@@ -1,154 +1,77 @@
 from flask import Flask, render_template, request, redirect, url_for
-import json
-import os
+from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
+import os
 
 app = Flask(__name__)
-ARQUIVO_LEADS = "leads.json"
 
-def carregar_leads():
-    if not os.path.exists(ARQUIVO_LEADS):
-        return []
-    with open(ARQUIVO_LEADS, "r") as f:
-        return json.load(f)
+# Corrige URL para postgres no Render
+db_url = os.getenv('DATABASE_URL', 'sqlite:///leads.db')
+if db_url.startswith("postgres://"):
+    db_url = db_url.replace("postgres://", "postgresql://", 1)
+app.config['SQLALCHEMY_DATABASE_URI'] = db_url
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-def salvar_leads(leads):
-    with open(ARQUIVO_LEADS, "w") as f:
-        json.dump(leads, f, indent=4)
+db = SQLAlchemy(app)
 
-@app.template_filter('format_data')
-def format_data(value):
-    try:
-        dt = datetime.strptime(value, "%Y-%m-%d")
-        return dt.strftime("%d/%m/%Y")
-    except Exception:
-        return value
+class Lead(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(100), nullable=False)
+    origem = db.Column(db.String(100), nullable=False)
+    data_contato = db.Column(db.Date, nullable=False)
+    observacao = db.Column(db.Text)
+    status = db.Column(db.String(50), nullable=False)
 
-@app.route("/", methods=["GET", "POST"])
+@app.before_first_request
+def create_tables():
+    db.create_all()
+
+@app.route('/')
 def index():
-    leads = carregar_leads()
+    leads = Lead.query.all()
+    return render_template('index.html', leads=leads)
 
-    # Pegando filtros da query string (GET) ou formulário (POST)
-    if request.method == "POST":
-        origem = request.form.get("origem", "").strip().lower()
-        status = request.form.get("status", "").strip()
-        data_inicio = request.form.get("data_inicio", "")
-        data_fim = request.form.get("data_fim", "")
-
-        def filtro(lead):
-            if origem and origem not in lead["origem"].lower():
-                return False
-            if status and lead["status"] != status:
-                return False
-            # Filtro data contato >= data_inicio
-            if data_inicio:
-                try:
-                    lead_date = datetime.strptime(lead["data_contato"], "%Y-%m-%d")
-                    inicio_date = datetime.strptime(data_inicio, "%Y-%m-%d")
-                    if lead_date < inicio_date:
-                        return False
-                except:
-                    return False
-            # Filtro data contato <= data_fim
-            if data_fim:
-                try:
-                    lead_date = datetime.strptime(lead["data_contato"], "%Y-%m-%d")
-                    fim_date = datetime.strptime(data_fim, "%Y-%m-%d")
-                    if lead_date > fim_date:
-                        return False
-                except:
-                    return False
-            return True
-
-        leads = list(filter(filtro, leads))
-
-    else:
-        # Se for GET, usa valores vazios para filtros
-        origem = ""
-        status = ""
-        data_inicio = ""
-        data_fim = ""
-
-    return render_template("index.html", leads=leads, origem=origem, status=status, data_inicio=data_inicio, data_fim=data_fim)
-
-@app.route("/cadastrar", methods=["GET", "POST"])
+@app.route('/cadastrar', methods=['GET', 'POST'])
 def cadastrar():
-    if request.method == "POST":
-        nome = request.form["nome"]
-        origem = request.form["origem"]
-        data_contato = request.form["data_contato"]
-        observacao = request.form["observacao"]
-        status = request.form["status"]
-        leads = carregar_leads()
-        leads.append({
-            "nome": nome,
-            "origem": origem,
-            "data_contato": data_contato,
-            "observacao": observacao,
-            "status": status
-        })
-        salvar_leads(leads)
-        return redirect(url_for("index"))
-    return render_template("cadastrar.html")
+    if request.method == 'POST':
+        nome = request.form['nome']
+        origem = request.form['origem']
+        data_contato = datetime.strptime(request.form['data_contato'], '%Y-%m-%d').date()
+        observacao = request.form['observacao']
+        status = request.form['status']
 
-@app.route("/editar/<int:index>", methods=["GET", "POST"])
-def editar(index):
-    leads = carregar_leads()
-    if index < 0 or index >= len(leads):
-        return "Lead não encontrado", 404
-    
-    if request.method == "POST":
-        leads[index]["nome"] = request.form["nome"]
-        leads[index]["origem"] = request.form["origem"]
-        leads[index]["data_contato"] = request.form["data_contato"]
-        leads[index]["observacao"] = request.form["observacao"]
-        leads[index]["status"] = request.form["status"]
-        salvar_leads(leads)
-        return redirect(url_for("index"))
-    
-    lead = leads[index]
-    return render_template("editar.html", lead=lead, index=index)
+        novo_lead = Lead(nome=nome, origem=origem, data_contato=data_contato, observacao=observacao, status=status)
+        db.session.add(novo_lead)
+        db.session.commit()
 
-@app.route("/excluir/<int:index>", methods=["POST"])
-def excluir(index):
-    leads = carregar_leads()
-    if index < 0 or index >= len(leads):
-        return "Lead não encontrado", 404
-    leads.pop(index)
-    salvar_leads(leads)
-    return redirect(url_for("index"))
+        return redirect(url_for('index'))
 
-if __name__ == "__main__":
-    app.run(debug=True)
+    return render_template('cadastrar.html')
 
+@app.route('/editar/<int:id>', methods=['GET', 'POST'])
+def editar(id):
+    lead = Lead.query.get_or_404(id)
 
+    if request.method == 'POST':
+        lead.nome = request.form['nome']
+        lead.origem = request.form['origem']
+        lead.data_contato = datetime.strptime(request.form['data_contato'], '%Y-%m-%d').date()
+        lead.observacao = request.form['observacao']
+        lead.status = request.form['status']
 
+        db.session.commit()
+        return redirect(url_for('index'))
 
+    return render_template('editar.html', lead=lead)
 
+@app.route('/excluir/<int:id>', methods=['POST'])
+def excluir(id):
+    lead = Lead.query.get_or_404(id)
+    db.session.delete(lead)
+    db.session.commit()
+    return redirect(url_for('index'))
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+if __name__ == '__main__':
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
 
