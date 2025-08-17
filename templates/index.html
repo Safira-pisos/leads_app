@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <title>Lista de Leads</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f7f9fc;
+            margin: 0; padding: 20px;
+            color: #333;
+        }
+        h1 {
+            color: #333;
+        }
+        .top-buttons {
+            margin-bottom: 20px;
+        }
+        .btn {
+            display: inline-block;
+            padding: 10px 20px;
+            font-weight: 600;
+            border-radius: 5px;
+            text-decoration: none;
+            color: white;
+            margin-right: 10px;
+            transition: background-color 0.3s ease;
+            cursor: pointer;
+            user-select: none;
+            border: none;
+        }
+        .btn-blue {
+            background-color: #007BFF;
+        }
+        .btn-blue:hover {
+            background-color: #0056b3;
+        }
+        .btn-green {
+            background-color: #28a745;
+        }
+        .btn-green:hover {
+            background-color: #1e7e34;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 0 8px rgba(0,0,0,0.1);
+        }
+        th, td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #ddd;
+            text-align: left;
+        }
+        th {
+            background-color: #007BFF;
+            color: white;
+        }
+        tr:hover {
+            background-color: #f1f9ff;
+        }
+        a.edit-link {
+            color: #28a745;
+            font-weight: 600;
+            text-decoration: none;
+            margin-right: 10px;
+        }
+        a.edit-link:hover {
+            text-decoration: underline;
+        }
+        form.filter-form {
+            background: white;
+            padding: 15px 20px;
+            margin-bottom: 25px;
+            border-radius: 8px;
+            box-shadow: 0 0 8px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: flex-end;
+        }
+        form.filter-form label {
+            font-weight: 600;
+            display: block;
+            margin-bottom: 5px;
+        }
+        form.filter-form input,
+        form.filter-form select {
+            padding: 7px 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 1em;
+            width: 160px;
+        }
+        form.filter-form button {
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 700;
+            transition: background-color 0.3s ease;
+        }
+        form.filter-form button:hover {
+            background-color: #0056b3;
+        }
+        form.filter-form .btn-clear {
+            background-color: #6c757d;
+        }
+        form.filter-form .btn-clear:hover {
+            background-color: #495057;
+        }
+        form.excluir-form {
+            display: inline;
+        }
+        form.excluir-form button {
+            background: none;
+            border: none;
+            color: #dc3545;
+            font-weight: 600;
+            cursor: pointer;
+            padding: 0;
+        }
+        form.excluir-form button:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <h1>Lista de Leads</h1>
+    <div class="top-buttons">
+        <a href="{{ url_for('cadastrar') }}" class="btn btn-blue">Cadastrar Novo Lead</a>
+    </div>
+
+    <form method="POST" class="filter-form">
+        <div>
+            <label for="origem">Origem</label>
+            <input type="text" name="origem" id="origem" value="{{ origem }}" placeholder="Filtrar por origem" />
+        </div>
+        <div>
+            <label for="status">Status</label>
+            <select name="status" id="status">
+                <option value="" {% if not status %}selected{% endif %}>Todos</option>
+                <option value="Em contato" {% if status == "Em contato" %}selected{% endif %}>Em contato</option>
+                <option value="Orçamento enviado" {% if status == "Orçamento enviado" %}selected{% endif %}>Orçamento enviado</option>
+                <option value="Em aberto" {% if status == "Em aberto" %}selected{% endif %}>Em aberto</option>
+                <option value="Fechado - ganho" {% if status == "Fechado - ganho" %}selected{% endif %}>Fechado - ganho</option>
+                <option value="Fechado - perdido" {% if status == "Fechado - perdido" %}selected{% endif %}>Fechado - perdido</option>
+            </select>
+        </div>
+        <div>
+            <label for="data_inicio">Data Início</label>
+            <input type="date" name="data_inicio" id="data_inicio" value="{{ data_inicio }}" />
+        </div>
+        <div>
+            <label for="data_fim">Data Fim</label>
+            <input type="date" name="data_fim" id="data_fim" value="{{ data_fim }}" />
+        </div>
+        <div>
+            <button type="submit">Filtrar</button>
+        </div>
+    </form>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Nome</th>
+                <th>Origem</th>
+                <th>Data do Contato</th>
+                <th>Observação</th>
+                <th>Status</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if leads %}
+                {% for lead in leads %}
+                <tr>
+                    <td>{{ lead.nome }}</td>
+                    <td>{{ lead.origem }}</td>
+                    <td>{{ lead.data_contato | format_data }}</td>
+                    <td>{{ lead.observacao }}</td>
+                    <td>{{ lead.status }}</td>
+                    <td>
+                        <a href="{{ url_for('editar', id=lead.id) }}" class="edit-link">Editar</a>
+                        <form action="{{ url_for('excluir', id=lead.id) }}" method="POST" class="excluir-form" onsubmit="return confirm('Tem certeza que deseja excluir este lead?');">
+                            <button type="submit">Excluir</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="6" style="text-align:center;">Nenhum lead encontrado.</td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</body>
+</html>
